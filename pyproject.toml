@@ -17,6 +17,7 @@ openai = "<2"
 tiktoken = ">=0.5.1"
 chromadb = ">=0.4.14"
 googletrans = ">=4.0.0-rc1"
+pysqlite3-binary = ">=0.5.2.post2"
 
 [build-system]
 requires = ["poetry-core"]
