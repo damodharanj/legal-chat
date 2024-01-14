@@ -1,17 +1,17 @@
+from langchain.schema import format_document
+from langchain_core.messages import AIMessage, HumanMessage, get_buffer_string
+from langchain_core.runnables import RunnableParallel
 from langchain.chat_models import ChatOpenAI
 from langchain.embeddings import OpenAIEmbeddings
-from langchain.prompts import ChatPromptTemplate
+from langchain.prompts.prompt import PromptTemplate
 from langchain.vectorstores import Chroma, weaviate, chroma
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.pydantic_v1 import BaseModel
+from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough, RunnableLambda
-from langchain_core.runnables import ConfigurableField
+from langchain_core.output_parsers import StrOutputParser
 from operator import itemgetter
 from googletrans import Translator
 
 translator = Translator()
-# Example for document loading (from url), splitting, and creating vectostore
-
 
 vectorstore = chroma.Chroma(
     collection_name="rag-chroma",
@@ -20,77 +20,75 @@ vectorstore = chroma.Chroma(
 )
 
 
-retriever = vectorstore.as_retriever().configurable_fields(
-    search_type=ConfigurableField(
-        id="search_type",
-        name="search_type"
-    ),
-    search_kwargs=ConfigurableField(
-        id="search_k",
-        name="search_k"
-    )
-)
-# retriever.aget_relevant_documents()
+retriever = vectorstore.as_retriever()
 
-# Embed a single document as a test
-# vectorstore = chroma.Chroma.from_texts(
-#     ["harrison worked at kensho"],
-#     collection_name="rag-chroma",
-#     embedding=OpenAIEmbeddings(),
-# )
-# retriever = vectorstore.as_retriever()
+_template = """Assume you are legal assistant who helps food related laws in India. 
+List various instructions based only on the following context:
 
-# RAG prompt
-template = """Assume you are legal assistant who helps food related laws in India. 
-Answer the question elaborately point wise based only on the following context:
-Country: India
-State: {state}
+Chat History:
+{chat_history}
+Follow Up Input: {question}
+Standalone question:"""
+CONDENSE_QUESTION_PROMPT = PromptTemplate.from_template(_template)
+
+template = """Answer the question based on the following context:
 {context}
 
-Question: {question_da}
+Question: {question}
 """
-prompt = ChatPromptTemplate.from_template(template)
+ANSWER_PROMPT = ChatPromptTemplate.from_template(template)
 
-# LLM
-model = ChatOpenAI(temperature=0).configurable_fields(
-    temperature=ConfigurableField(
-        name='temperature',
-        id='temperature'
+DEFAULT_DOCUMENT_PROMPT = PromptTemplate.from_template(template="{page_content}")
+
+
+def _combine_documents(
+    docs, document_prompt=DEFAULT_DOCUMENT_PROMPT, document_separator="\n\n"
+):
+    doc_strings = [format_document(doc, document_prompt) for doc in docs]
+    print(doc_strings)
+    return document_separator.join(doc_strings)
+
+_inputs = RunnableParallel(
+    standalone_question=RunnablePassthrough.assign(
+        chat_history=lambda x: get_buffer_string(x["chat_history"])
     )
+    | CONDENSE_QUESTION_PROMPT
+    | ChatOpenAI(temperature=0)
+    | StrOutputParser(),
 )
+_context = {
+    "context": itemgetter("standalone_question") | retriever | _combine_documents,
+    "question": lambda x: x["standalone_question"],
+}
+conversational_qa_chain = _inputs | _context | ANSWER_PROMPT | ChatOpenAI()
 
-from langchain.callbacks.manager import CallbackManager
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-from langchain.llms import Ollama
-
-llm = Ollama(
-    model="llama2",
-    callback_manager=CallbackManager([StreamingStdOutCallbackHandler()])
-)
+chain = conversational_qa_chain
 
 
 def translate(arg):
     return translator.translate(arg, 'ta').text
 
+import streamlit as st
 
-# RAG chain
-chain = (
-    {
-        "context": retriever, 
-        "question_da": RunnablePassthrough(),
-        "state": RunnableLambda(lambda x: 'tamil_nadu')
-    }
-    | prompt
-    | llm
-    | StrOutputParser()
-    | translate
-)
+if "messages" not in st.session_state:
+    st.session_state["messages"] = []
+
+for msg in st.session_state.messages:
+    st.chat_message(msg["role"]).write(msg["content"])
+
+prompt_str = st.chat_input()
 
 
-
-# Add typing for input
-class Question_D(BaseModel):
-    __root__: str
-
-
-chain = chain.with_types(input_type=Question_D)
+# chain.invoke(input=prompt_str)
+if prompt_str:
+    st.session_state.messages.append({"role": "user", "content": prompt_str})
+    st.chat_message("user").write(prompt_str)
+    msg1 = chain.invoke(
+        {
+            "question": prompt_str,
+            "chat_history": [],
+        }
+    ).content
+    tamil = translate(msg1)
+    st.session_state.messages.append({"role": "assistant", "content": tamil})
+    st.chat_message("assistant").write(tamil)
