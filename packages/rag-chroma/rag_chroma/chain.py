@@ -12,7 +12,7 @@ from operator import itemgetter
 from googletrans import Translator
 import streamlit as st
 
-st.title("💬 தமிழ் சட்ட உதவியாளர் - Food legal assistant")
+st.title("💬 பேட்டை: தமிழ் சட்ட உதவியாளர் - PettAI: Food legal assistant")
 
 translator = Translator()
 
@@ -26,7 +26,7 @@ vectorstore = chroma.Chroma(
 retriever = vectorstore.as_retriever()
 
 _template = """Assume you are legal assistant who helps food related laws in India. 
-Help the user by explaining in a detailed answer
+Help the user by explaining the answer
 
 Chat History:
 {chat_history}
