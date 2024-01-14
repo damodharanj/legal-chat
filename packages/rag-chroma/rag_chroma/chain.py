@@ -95,6 +95,7 @@ if prompt_str:
             "chat_history": [],
         }
     ).content
+    print('msg1', msg1)
     tamil = translate(msg1)
     st.session_state.messages.append({"role": "assistant", "content": tamil})
     st.chat_message("assistant").write(tamil)
