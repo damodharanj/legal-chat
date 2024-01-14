@@ -4,3 +4,5 @@ translate-module/
 *.html
 target
 tamil_trans_1000
+secrets.toml
+.DS_*
