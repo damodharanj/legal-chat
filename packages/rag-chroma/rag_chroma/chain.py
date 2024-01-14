@@ -10,6 +10,9 @@ from langchain_core.runnables import RunnableParallel, RunnablePassthrough, Runn
 from langchain_core.output_parsers import StrOutputParser
 from operator import itemgetter
 from googletrans import Translator
+import streamlit as st
+
+st.title("💬 தமிழ் சட்ட உதவியாளர் - Food legal assistant")
 
 translator = Translator()
 
@@ -23,7 +26,7 @@ vectorstore = chroma.Chroma(
 retriever = vectorstore.as_retriever()
 
 _template = """Assume you are legal assistant who helps food related laws in India. 
-List various answers based only on the following context:
+Help the user by explaining in a detailed answer
 
 Chat History:
 {chat_history}
@@ -31,7 +34,10 @@ Follow Up Input: {question}
 Standalone question:"""
 CONDENSE_QUESTION_PROMPT = PromptTemplate.from_template(_template)
 
-template = """Answer the question based on the following context:
+template = """
+* List down all the points that are in the context
+* For each point in markdown explain it in detail with example
+Answer the question based on the following context:
 {context}
 
 Question: {question}
@@ -45,7 +51,7 @@ def _combine_documents(
     docs, document_prompt=DEFAULT_DOCUMENT_PROMPT, document_separator="\n\n"
 ):
     doc_strings = [format_document(doc, document_prompt) for doc in docs]
-    print(doc_strings)
+    print(docs)
     return document_separator.join(doc_strings)
 
 _inputs = RunnableParallel(
@@ -53,14 +59,14 @@ _inputs = RunnableParallel(
         chat_history=lambda x: get_buffer_string(x["chat_history"])
     )
     | CONDENSE_QUESTION_PROMPT
-    | ChatOpenAI(temperature=0)
+    | ChatOpenAI(temperature=0, api_key=st.secrets["OPENAI_API_KEY"])
     | StrOutputParser(),
 )
 _context = {
     "context": itemgetter("standalone_question") | retriever | _combine_documents,
     "question": lambda x: x["standalone_question"],
 }
-conversational_qa_chain = _inputs | _context | ANSWER_PROMPT | ChatOpenAI()
+conversational_qa_chain = _inputs | _context | ANSWER_PROMPT | ChatOpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 chain = conversational_qa_chain
 
@@ -68,7 +74,7 @@ chain = conversational_qa_chain
 def translate(arg):
     return translator.translate(arg, 'ta').text
 
-import streamlit as st
+
 
 if "messages" not in st.session_state:
     st.session_state["messages"] = []
