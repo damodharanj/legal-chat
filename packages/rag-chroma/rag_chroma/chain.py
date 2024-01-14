@@ -15,7 +15,7 @@ translator = Translator()
 
 vectorstore = chroma.Chroma(
     collection_name="rag-chroma",
-    persist_directory="/Users/damodharan-2579/food-act-embedding/",
+    persist_directory="./food-act-embedding/",
     embedding_function=OpenAIEmbeddings(),
 )
 
@@ -23,7 +23,7 @@ vectorstore = chroma.Chroma(
 retriever = vectorstore.as_retriever()
 
 _template = """Assume you are legal assistant who helps food related laws in India. 
-List various instructions based only on the following context:
+List various answers based only on the following context:
 
 Chat History:
 {chat_history}
