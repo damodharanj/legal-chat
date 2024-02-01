@@ -6,3 +6,4 @@ target
 tamil_trans_1000
 secrets.toml
 .DS_*
+tempDir
